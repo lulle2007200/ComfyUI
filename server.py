@@ -22,6 +22,8 @@ import aiohttp
 from aiohttp import web
 import logging
 
+import model_hash_manager
+
 import mimetypes
 from comfy.cli_args import args
 import comfy.utils
@@ -268,6 +270,39 @@ class PromptServer():
             model_types = list(folder_paths.folder_names_and_paths.keys())
 
             return web.json_response(model_types)
+
+        @routes.post("/model_hash")
+        async def get_model_hash(request):
+            post = await request.json()
+
+            hash_type = post.get("hash_type", None)
+            folder = post.get("folder", None)
+            name = post.get("name", None)
+
+            try:
+                hash_type = model_hash_manager.ModelHashType(hash_type)
+            except ValueError:
+                return web.Response(status=404)
+
+            if not folder in folder_paths.folder_names_and_paths:
+                return web.Response(status=404)
+            files = folder_paths.get_filename_list(folder)
+            if not name in files:
+                return web.Response(status=404)
+
+            model_path = folder_paths.get_full_path(folder, name)
+            if not model_path:
+                return web.Response(status=404)
+
+            request_id = uuid.uuid4()
+
+            res = {
+                "request_id": request_id
+            }
+
+            model_hash_manager.model_hasher.put(self, model_path, request_id, hash_type)
+
+            return web.json_response(res, status = 200)
 
         @routes.get("/models/{folder}")
         async def get_models(request):
