@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import queue
+import logging
 
 class ModelHashType(Enum):
 	SHA256 = "sha256"
@@ -26,18 +27,32 @@ class ModelHasher:
 
 			try:
 				self.calculate_model_hash(server, model_path, hash_type, request_id)
-			except:
+			except Exception as e:
 				res = {
 					"request_id": request_id
 				}
-				server.send_sync("model_hash_fail", res)
+				server.send_sync("hash_fail", res)
 			self.job_queue.task_done()
 
 	def calculate_model_hash(self, server, model_path: str, hash_type: ModelHashType = ModelHashType.SHA256, request_id = None):
-		hash_path = os.path.join(model_path, ".hash")
-
 		hash_data = {}
+
+		hash_path = os.path.splitext(model_path)[0] + f".{hash_type.value}"
 		if os.path.exists(hash_path):
+			with open(hash_path, "r") as hash_file:
+				try:
+					content    = hash_file.readline()
+					model_hash = content.split(' ', 1)[0]
+
+					hash_data = {
+						hash_type.value: model_hash
+					}
+
+				except OSError:
+					hash_data = {}
+
+		hash_path = model_path + ".hash"
+		if not hash_data and os.path.exists(hash_path):
 			with open(hash_path, "r") as hash_file:
 				try:
 					hash_data = json.load(hash_file)
@@ -65,6 +80,6 @@ class ModelHasher:
 			"hash": model_hash,
 		}
 
-		server.send_sync("model_hash_complete", res)
+		server.send_sync("hash_complete", res)
 
 model_hasher = ModelHasher()

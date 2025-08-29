@@ -274,31 +274,31 @@ class PromptServer():
         @routes.post("/model_hash")
         async def get_model_hash(request):
             post = await request.json()
+            request_id = str(uuid.uuid4())
 
+            res = {}
+            res["request_id"] = request_id
+
+            errors = []
             hash_type = post.get("hash_type", None)
             folder = post.get("folder", None)
             name = post.get("name", None)
-
             try:
                 hash_type = model_hash_manager.ModelHashType(hash_type)
             except ValueError:
-                return web.Response(status=404)
-
+                errors.append(f"Model hash method {hash_type} not supported")
             if not folder in folder_paths.folder_names_and_paths:
-                return web.Response(status=404)
-            files = folder_paths.get_filename_list(folder)
-            if not name in files:
-                return web.Response(status=404)
-
+                errors.append(f"Folder {folder} not found")
+            else:
+                files = folder_paths.get_filename_list(folder)
+                if not name in files:
+                    errors.append(f"Model {folder}/{name} not found")
             model_path = folder_paths.get_full_path(folder, name)
-            if not model_path:
-                return web.Response(status=404)
-
-            request_id = uuid.uuid4()
-
-            res = {
-                "request_id": request_id
-            }
+            if errors:
+                for e in errors:
+                    logging.info(e)
+                res["error"] = errors
+                return web.json_response(res, status=404)
 
             model_hash_manager.model_hasher.put(self, model_path, request_id, hash_type)
 
