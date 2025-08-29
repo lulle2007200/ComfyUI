@@ -1,1 +1,1 @@
-from hash_models import *
+from .hash_models import *
